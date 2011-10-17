@@ -1,5 +1,4 @@
-import sublime, sublime_plugin, os, os.path, hashlib
-from difflib import SequenceMatcher
+import sublime, sublime_plugin, os, os.path, re, codecs, hashlib
 
 class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 	"""
@@ -15,22 +14,19 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 
 		self.append("\nSearhing for duplicate lines\n")
 		
-		idx = LineIndex(file_extension='py')
+		idx = LineIndex(file_extension='pm')
 		for folder in sublime.active_window().folders():
 			idx.index(folder)
 		
-		dict = idx.get_overlaps()
-		for key in dict.keys():
-			overlap = dict[key]
+		self.append('\n\n' + str(len(idx.get_chunks())))
 
-			if (overlap['size'] < 2) or (len(overlap['files']) < 2):
-				continue
+		for chunk in idx.get_chunks():
+			#self.append('\n\n' + str(chunk.get_hash()))
+			#self.append('\n' + str(chunk.get_text()))
+			#self.append('\n' + str(chunk.get_files()))
 			
-			self.append('\n\n' + str(overlap['size']) + ' lines are common across')
-			self.append('\n'.join(overlap['files']))
-			self.append('\n\nlines are:\n' + '\n'.join(overlap['lines']))
-
-			self.append('\n--------------------------------------------------------\n')
+			if len(chunk.get_files()) > 1:
+				self.append('\n\n' + str(chunk.get_files()))
 
 		self.results.show(0)
 
@@ -41,12 +37,11 @@ class LineIndex:
 	"""
 	helper index for duplicate text blocks across files
 	"""
-	def __init__(self, file_extension='py'):
+	def __init__(self, file_extension='py', comment_char='#'):
 		self.file_extension = file_extension
+		self.comment_char = comment_char
 		self.files = []
-		self.match_index = {}
-		self.comparer = \
-			SequenceMatcher(lambda ignored_characters: ignored_characters in " \t\n")
+		self.chunk_index = {}
 		
 		
 	def index(self, dirname):
@@ -55,33 +50,49 @@ class LineIndex:
 				if fname.endswith('.' + self.file_extension):
 					self.files.append(os.path.join(root, fname))
 		
-		for i in range(0, len(self.files)):
-			for j in range(i, len(self.files)):
-				self.compare(self.files[i], self.files[j])
+		for file in self.files:
+			self.index_file(file)
 	
-	def compare(self, file1, file2):
-		with open(file1) as file: 
- 			with open(file2) as another_file:
+	def index_file(self, file_path):
+		
+		with codecs.open(file_path, 'r', 'cp1251') as file: 
+			text = file.readlines()
+			for line in text:
+				if line.startswith(self.comment_char):
+					continue
+				line = re.sub('\s+', ' ', line)
+				
+				chunk = Chunk(line, file_path)
+				
+				known_chunk = self.chunk_index.get(chunk.get_hash(), chunk)
+				known_chunk.add_file(file_path)
+				self.chunk_index[chunk.get_hash()] = chunk
 
- 				text1 = file.readlines()
- 				text2 = another_file.readlines()
-
- 				self.comparer.set_seqs(text1, text2)
- 				for match in self.comparer.get_matching_blocks():
- 					
- 					if match.size == 0:
-	 					continue
-
-					overlap_lines = text1[match.a:match.size]
- 					 					
- 					overlap_sha = hashlib.md5(';'.join(overlap_lines)).hexdigest()
- 					overlap = self.match_index.get(overlap_sha, {'files': set(), 'lines':[]})
- 					overlap['files'].add(file1)
- 					overlap['files'].add(file2)
- 					overlap['lines'] = overlap_lines
- 					overlap['size'] = match.size
- 					self.match_index[overlap_sha] = overlap
-
- 	def get_overlaps(self):
- 		return self.match_index
+ 	def get_chunks(self):
+ 		return self.chunk_index.values()
 	
+class Chunk:
+	"""
+	Unique piece of code (currently its just a hash of one line)
+	"""
+	def __init__(self, line, file_path):
+		self.text = line
+		self.files = set([file_path])
+
+		# TODO: if 32 bits not enough use something fast and large instead
+		# like MurmurHash http://pypi.python.org/pypi/smhasher
+		self.hashsum = line.__hash__()
+		#self.hashsum = hashlib.md5(line).hexdigest()
+		
+	
+	def get_files(self):
+		return self.files
+	
+	def get_hash(self):
+		return self.hashsum
+
+	def get_text(self):
+		return self.text
+
+	def add_file(self, file_path):
+		self.files.add(file_path)
