@@ -1,4 +1,4 @@
-import sublime, sublime_plugin, os, os.path, re, codecs, hashlib
+import sublime, sublime_plugin, os, os.path, re, hashlib
 
 class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 	"""
@@ -18,15 +18,12 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 		for folder in sublime.active_window().folders():
 			idx.index(folder)
 		
-		self.append('\n\n' + str(len(idx.get_chunks())))
+		self.append('\n\n' + unicode(len(idx.get_chunks())))
 
 		for chunk in idx.get_chunks():
-			#self.append('\n\n' + str(chunk.get_hash()))
-			#self.append('\n' + str(chunk.get_text()))
-			#self.append('\n' + str(chunk.get_files()))
-			
 			if len(chunk.get_files()) > 1:
-				self.append('\n\n' + str(chunk.get_files()))
+				#self.append('\n\n' + chunk.get_text())
+				self.append('\n\n' + unicode(chunk.get_files()))
 
 		self.results.show(0)
 
@@ -55,18 +52,21 @@ class LineIndex:
 	
 	def index_file(self, file_path):
 		
-		with codecs.open(file_path, 'r', 'cp1251') as file: 
+		with open(file_path, 'r') as file: 
 			text = file.readlines()
 			for line in text:
+				line = line.decode('cp1251')
+				
 				if line.startswith(self.comment_char):
 					continue
 				line = re.sub('\s+', ' ', line)
 				
 				chunk = Chunk(line, file_path)
-				
-				known_chunk = self.chunk_index.get(chunk.get_hash(), chunk)
-				known_chunk.add_file(file_path)
-				self.chunk_index[chunk.get_hash()] = chunk
+
+				if chunk.get_hash() in self.chunk_index:
+					self.chunk_index[chunk.get_hash()].add_file(file_path)
+				else:
+					self.chunk_index[chunk.get_hash()] = chunk
 
  	def get_chunks(self):
  		return self.chunk_index.values()
@@ -82,7 +82,7 @@ class Chunk:
 		# TODO: if 32 bits not enough use something fast and large instead
 		# like MurmurHash http://pypi.python.org/pypi/smhasher
 		self.hashsum = line.__hash__()
-		#self.hashsum = hashlib.md5(line).hexdigest()
+		#self.hashsum = hashlib.md5(line.encode()).hexdigest()
 		
 	
 	def get_files(self):
