@@ -20,10 +20,14 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 		
 		self.append('\n\n' + unicode(len(idx.get_chunks())))
 
+		for chunk in idx.get_common_chunks():
+			#self.append('\n\n' + chunk.get_text())
+			self.append('\n\n' + unicode(chunk.get_files()))
+
 		for chunk in idx.get_chunks():
-			if len(chunk.get_files()) > 1:
-				#self.append('\n\n' + chunk.get_text())
-				self.append('\n\n' + unicode(chunk.get_files()))
+			if len(chunk.files) > 1:
+				self.append('\n\n' + unicode(chunk.files))
+		
 
 		self.results.show(0)
 
@@ -38,7 +42,7 @@ class LineIndex:
 		self.file_extension = file_extension
 		self.comment_char = comment_char
 		self.files = []
-		self.chunk_index = {}
+		self.unique_chunk_index = {}
 		
 		
 	def index(self, dirname):
@@ -54,45 +58,108 @@ class LineIndex:
 		
 		with open(file_path, 'r') as file: 
 			text = file.readlines()
+
 			for line in text:
 				line = line.decode('cp1251')
 				
 				if line.startswith(self.comment_char):
 					continue
+				
 				line = re.sub('\s+', ' ', line)
 				
 				chunk = Chunk(line, file_path)
 
-				if chunk.get_hash() in self.chunk_index:
-					self.chunk_index[chunk.get_hash()].add_file(file_path)
+				if chunk in self.unique_chunk_index:
+					self.unique_chunk_index[chunk.get_hash()].add_file(file_path)
 				else:
-					self.chunk_index[chunk.get_hash()] = chunk
+					self.unique_chunk_index[chunk.get_hash()] = chunk
 
  	def get_chunks(self):
- 		return self.chunk_index.values()
+ 		return self.unique_chunk_index.values()
+
+	"""naive, second-pass way to find common sequences"""
+ 	def get_common_chunks(self, min_lines = 2):
+ 		
+ 		common_chunks = set()
+
+		for file in self.files:
+			common_chunks.update(self.get_file_common_chunks(file, min_lines))
+		
+		return common_chunks
+
+	def get_file_common_chunks(self, file_path, min_lines):
+
+		large_chunks = []
+
+		with open(file_path, 'r') as file: 
+			text = file.readlines()
+
+			started_chunk = Chunk(length=0)
+
+			for line in text:
+				line = line.decode('cp1251')
+				
+				if line.startswith(self.comment_char):
+					continue
+				
+				line = re.sub('\s+', ' ', line)
+				
+				chunk = Chunk(line)
+				chunk = self.unique_chunk_index[chunk.get_hash()]
+
+				if len(chunk.files) > 1:
+					sublime.status_message(unicode(chunk.files))
+
+				if len(chunk.files) < 2:
+					if started_chunk.length >= min_lines:
+						large_chunks.append(started_chunk)
+
+					started_chunk = Chunk(length=0)
+					continue
+				
+				started_chunk = started_chunk.merge(chunk)
+		
+		if len (large_chunks) > 1:
+			sublime.status_message(unicode(large_chunks))
+
+		return large_chunks
 	
 class Chunk:
 	"""
 	Unique piece of code (currently its just a hash of one line)
 	"""
-	def __init__(self, line, file_path):
-		self.text = line
-		self.files = set([file_path])
-
-		# TODO: if 32 bits not enough use something fast and large instead
-		# like MurmurHash http://pypi.python.org/pypi/smhasher
-		self.hashsum = line.__hash__()
-		#self.hashsum = hashlib.md5(line.encode()).hexdigest()
+	def __init__(self, text = '', file_path = '', length = 1):
 		
-	
+		self.text = text
+		self.files = set([file_path])
+		self.length = length
+
+	def __hash__(self):
+		return self.get_hash()
+
 	def get_files(self):
 		return self.files
 	
 	def get_hash(self):
-		return self.hashsum
+		# TODO: if 32 bits not enough use something fast and large instead
+		# like MurmurHash http://pypi.python.org/pypi/smhasher
+		return self.text.__hash__()
+		#return hashlib.md5(self.line.encode()).hexdigest()
 
 	def get_text(self):
 		return self.text
 
 	def add_file(self, file_path):
 		self.files.add(file_path)
+	
+	def merge(self, another_chunk):
+
+		merge_result = Chunk(self.text + another_chunk.text)
+		merge_result.length = self.length + another_chunk.length
+		if len(self.files) == 0:
+			merge_result.files = another_chunk.files
+		else:
+			merge_result.files = self.files.intersection(another_chunk.files)
+		
+		return merge_result
+
