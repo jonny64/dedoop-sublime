@@ -1,7 +1,9 @@
 1. DESCRIPTION
 
-	this plugin finds duplicate code across project
+	This Sublime 2 plugin finds duplicate code across project
+
 	just proof of concept, use it at your own risk
+
 	works fine for simple case 
 	(https://github.com/do-/eludia/, 10k lines project, threshold minimum 30 common lines)
 

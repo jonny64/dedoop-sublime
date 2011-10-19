@@ -32,12 +32,13 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 
 		# find common chunks, print report
 		for chunk in idx.get_common_chunks(min_lines=40):
+			self.append('\n------------------------------------------------------------------')
 			self.append(
-				'\n\n {0} lines are common across following set of project files: ' \
+				'{0} lines are common across following set of project files: ' \
 					.format(chunk.length)
 			)
 			for file_path in chunk.get_files():
-				self.append('\t - {0}'.format(file_path))
+				self.append('\t{0}'.format(file_path))
 			self.append(chunk.get_text())
 
 		# scroll to top
@@ -145,6 +146,7 @@ class Chunk:
 	"""
 	def __init__(self, text = '', file_path = '', length = 1):
 		
+		self.original_text = text
 		self.text = re.sub('\s+', ' ', text)
 		self.files = set([file_path])
 		self.length = length
@@ -162,14 +164,14 @@ class Chunk:
 		#return hashlib.md5(self.line.encode()).hexdigest()
 
 	def get_text(self):
-		return self.text
+		return self.original_text
 
 	def add_file(self, file_path):
 		self.files.add(file_path)
 	
 	def merge(self, another_chunk):
 
-		merge_result = Chunk(self.text + another_chunk.text)
+		merge_result = Chunk(self.original_text + '\n' + another_chunk.original_text)
 		merge_result.length = self.length + another_chunk.length
 		if len(self.files) == 0:
 			merge_result.files = another_chunk.files
