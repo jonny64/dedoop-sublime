@@ -5,7 +5,7 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 	seeks and shows all duplicate fragments across current project files
 	"""
 
-	def run(self, edit): 
+	def run(self, edit, file_extension='pm', encoding='cp1251', comment_char='#', min_lines=20): 
 		
 		self.results = self.view.window().new_file()
 		self.results.set_name('Duplicate code in project')
@@ -14,7 +14,13 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 
 		self.append("\nSearhing for duplicate lines\n")
 		
-		idx = LineIndex(file_extension='pm')
+		# index files in project folders
+		idx = LineIndex(
+			file_extension = file_extension,
+			encoding       = encoding,
+			comment_char   = comment_char,
+			min_lines      = min_lines
+		)
 		for folder in sublime.active_window().folders():
 			idx.index(folder)
 		
@@ -22,7 +28,9 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 			'{0} unique lines indexed ' \
 				.format(len(idx.get_chunks()))
 		)
+		self.append('searching for text duplicates larger than {0} lines'.format(min_lines))
 
+		# find common chunks, print report
 		for chunk in idx.get_common_chunks(min_lines=40):
 			self.append(
 				'\n\n {0} lines are common across following set of project files: ' \
@@ -31,8 +39,6 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 			for file_path in chunk.get_files():
 				self.append('\t - {0}'.format(file_path))
 			self.append(chunk.get_text())
-
-		
 
 		# scroll to top
 		self.results.show(0)
@@ -44,12 +50,14 @@ class LineIndex:
 	"""
 	helper index for duplicate text blocks across files
 	"""
-	def __init__(self, file_extension='py', comment_char='#'):
-		self.file_extension = file_extension
-		self.comment_char = comment_char
+	def __init__(self, file_extension='pm', encoding = 'cp1251', comment_char='#', min_lines=20):
 		self.files = []
 		self.unique_chunk_index = {}
 		
+		self.file_extension = file_extension
+		self.comment_char = comment_char
+		self.encoding = encoding
+		self.min_lines = min_lines
 		
 	def index(self, dirname):
 		for root, dirs, files in os.walk(dirname):
@@ -60,13 +68,17 @@ class LineIndex:
 		for file in self.files:
 			self.index_file(file)
 	
+	"""
+	first pass: hash every chunk (line) and find files where it exists
+	TODO: use larger chunks
+	"""
 	def index_file(self, file_path):
 		
 		with open(file_path, 'r') as file: 
 			text = file.readlines()
 
 			for line in text:
-				line = line.decode('cp1251')
+				line = line.decode(self.encoding)
 				
 				line = line.strip()
 
@@ -83,8 +95,7 @@ class LineIndex:
  	def get_chunks(self):
  		return self.unique_chunk_index.values()
 
-	"""naive, second-pass way to find common sequences"""
- 	def get_common_chunks(self, min_lines = 2):
+	def get_common_chunks(self, min_lines = 2):
  		
  		common_chunks = set()
 
@@ -93,6 +104,10 @@ class LineIndex:
 		
 		return common_chunks
 
+	"""
+	yep, second pass 
+	for given file returns text chunks which exist in more than one file
+	"""
 	def get_file_common_chunks(self, file_path, min_lines):
 
 		large_chunks = []
@@ -103,7 +118,7 @@ class LineIndex:
 			started_chunk = Chunk(length=0)
 
 			for line in text:
-				line = line.decode('cp1251')
+				line = line.decode(self.encoding)
 				
 				line = line.strip()
 				
