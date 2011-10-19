@@ -18,17 +18,23 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 		for folder in sublime.active_window().folders():
 			idx.index(folder)
 		
-		self.append('\n\n' + unicode(len(idx.get_chunks())))
+		self.append(
+			'{0} unique lines indexed ' \
+				.format(len(idx.get_chunks()))
+		)
 
-		for chunk in idx.get_common_chunks():
-			#self.append('\n\n' + chunk.get_text())
-			self.append('\n\n' + unicode(chunk.get_files()))
+		for chunk in idx.get_common_chunks(min_lines=40):
+			self.append(
+				'\n\n {0} lines are common across following set of project files: ' \
+					.format(chunk.length)
+			)
+			for file_path in chunk.get_files():
+				self.append('\t - {0}'.format(file_path))
+			self.append(chunk.get_text())
 
-		for chunk in idx.get_chunks():
-			if len(chunk.files) > 1:
-				self.append('\n\n' + unicode(chunk.files))
 		
 
+		# scroll to top
 		self.results.show(0)
 
 	def append(self, text):
@@ -62,14 +68,14 @@ class LineIndex:
 			for line in text:
 				line = line.decode('cp1251')
 				
+				line = line.strip()
+
 				if line.startswith(self.comment_char):
 					continue
 				
-				line = re.sub('\s+', ' ', line)
-				
 				chunk = Chunk(line, file_path)
 
-				if chunk in self.unique_chunk_index:
+				if self.unique_chunk_index.has_key(chunk.get_hash()):
 					self.unique_chunk_index[chunk.get_hash()].add_file(file_path)
 				else:
 					self.unique_chunk_index[chunk.get_hash()] = chunk
@@ -99,28 +105,22 @@ class LineIndex:
 			for line in text:
 				line = line.decode('cp1251')
 				
+				line = line.strip()
+				
 				if line.startswith(self.comment_char):
 					continue
 				
-				line = re.sub('\s+', ' ', line)
-				
 				chunk = Chunk(line)
-				chunk = self.unique_chunk_index[chunk.get_hash()]
-
-				if len(chunk.files) > 1:
-					sublime.status_message(unicode(chunk.files))
+				chunk.files = self.unique_chunk_index[chunk.get_hash()].files
 
 				if len(chunk.files) < 2:
-					if started_chunk.length >= min_lines:
+					if started_chunk.length >= min_lines and len(started_chunk.files) > 1:
 						large_chunks.append(started_chunk)
 
 					started_chunk = Chunk(length=0)
 					continue
 				
 				started_chunk = started_chunk.merge(chunk)
-		
-		if len (large_chunks) > 1:
-			sublime.status_message(unicode(large_chunks))
 
 		return large_chunks
 	
@@ -130,7 +130,7 @@ class Chunk:
 	"""
 	def __init__(self, text = '', file_path = '', length = 1):
 		
-		self.text = text
+		self.text = re.sub('\s+', ' ', text)
 		self.files = set([file_path])
 		self.length = length
 
