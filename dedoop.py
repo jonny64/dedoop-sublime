@@ -5,14 +5,18 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 	seeks and shows all duplicate fragments across current project files
 	"""
 
-	def run(self, edit, file_extension='pm', encoding='cp1251', comment_char='#', min_lines=20): 
+	def run(self, edit, file_extension='js', encoding='utf-8', comment_char='//', min_lines=50): 
 		
 		self.results = self.view.window().new_file()
 		self.results.set_name('Duplicate code in project')
 		self.results.set_scratch(True)
 		self.edit = edit
 
-		self.append("\nSearhing for duplicate lines\n")
+		self.append("\nSearching for duplicate lines in project folders:")
+		project_folders = sublime.active_window().folders()
+		if len(project_folders) == 0:
+			self.append("\nProject does not contain any folder. Aborting")
+			return
 		
 		# index files in project folders
 		idx = LineIndex(
@@ -21,22 +25,28 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 			comment_char   = comment_char,
 			min_lines      = min_lines
 		)
-		for folder in sublime.active_window().folders():
+		for folder in project_folders:
+			self.append("\t{0}".format(folder))
 			idx.index(folder)
 		
 		self.append(
-			'{0} unique lines indexed ' \
+			'\n{0} unique lines indexed ' \
 				.format(len(idx.get_chunks()))
 		)
 		self.append('searching for text duplicates larger than {0} lines'.format(min_lines))
 
 		# find common chunks, print report
-		for chunk in idx.get_common_chunks(min_lines=40):
+		common_chunks = idx.get_common_chunks()
+		if len(common_chunks) == 0:
+			self.append("\nNothing found. Your project is probably ok")
+			return
+
+		for chunk in common_chunks:
 			self.append('\n------------------------------------------------------------------')
 			self.append(
 				'{0} lines are common across following set of project files: ' \
 					.format(chunk.length)
-			)
+				)
 			for file_path in chunk.get_files():
 				self.append('\t{0}'.format(file_path))
 			self.append(chunk.get_text())
@@ -51,13 +61,13 @@ class LineIndex:
 	"""
 	helper index for duplicate text blocks across files
 	"""
-	def __init__(self, file_extension='pm', encoding = 'cp1251', comment_char='#', min_lines=20):
+	def __init__(self, file_extension, encoding, comment_char, min_lines):
 		self.files = []
 		self.unique_chunk_index = {}
 		
 		self.file_extension = file_extension
-		self.comment_char = comment_char
 		self.encoding = encoding
+		self.comment_char = comment_char
 		self.min_lines = min_lines
 		
 	def index(self, dirname):
@@ -81,13 +91,14 @@ class LineIndex:
 			for line in text:
 				line = line.decode(self.encoding)
 				
-				line = line.strip()
-
-				if line.startswith(self.comment_char):
+				if line.strip().startswith(self.comment_char):
 					continue
 				
 				chunk = Chunk(line, file_path)
 
+				if chunk.length == 0:
+					continue
+				
 				if self.unique_chunk_index.has_key(chunk.get_hash()):
 					self.unique_chunk_index[chunk.get_hash()].add_file(file_path)
 				else:
@@ -96,12 +107,12 @@ class LineIndex:
  	def get_chunks(self):
  		return self.unique_chunk_index.values()
 
-	def get_common_chunks(self, min_lines = 2):
+	def get_common_chunks(self):
  		
  		common_chunks = set()
 
 		for file in self.files:
-			common_chunks.update(self.get_file_common_chunks(file, min_lines))
+			common_chunks.update(self.get_file_common_chunks(file, self.min_lines))
 		
 		return common_chunks
 
@@ -121,12 +132,13 @@ class LineIndex:
 			for line in text:
 				line = line.decode(self.encoding)
 				
-				line = line.strip()
-				
-				if line.startswith(self.comment_char):
+				if line.strip().startswith(self.comment_char):
 					continue
 				
 				chunk = Chunk(line)
+				if chunk.length == 0:
+					continue
+				
 				chunk.files = self.unique_chunk_index[chunk.get_hash()].files
 
 				if len(chunk.files) < 2:
@@ -147,12 +159,21 @@ class Chunk:
 	def __init__(self, text = '', file_path = '', length = 1):
 		
 		self.original_text = text
-		self.text = re.sub('\s+', ' ', text)
+		self.text = re.sub('\s+', ' ', text.strip())
 		self.files = set([file_path])
+
+		if not self.text:
+			self.length = 0
+			return
+
 		self.length = length
 
+	# hashble
 	def __hash__(self):
 		return self.get_hash()
+	
+	def __eq__(self, other):
+		return self.get_hash() == other.get_hash()
 
 	def get_files(self):
 		return self.files
