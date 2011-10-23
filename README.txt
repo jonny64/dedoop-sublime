@@ -11,8 +11,6 @@
 
 	place dedoop.py to your User packages folder
 
-	change filter via file_extension option (see dedoop.py, defaults to python files)
-
 	add hotkey to your platform .sublime-keymap file (via Preferences - Key Bindings - User), like this:
 
 	{ "keys": ["ctrl+alt+d"], "command": "find_duplicate_code",  

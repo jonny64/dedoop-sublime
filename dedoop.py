@@ -38,7 +38,7 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 			output_tab.log("\nNothing found. Your project is probably ok")
 			return
 
-		for chunk in common_chunks:
+		for chunk in sorted(common_chunks, key=lambda chunk: chunk.length, reverse=True):
 			output_tab.log('\n------------------------------------------------------------------')
 			output_tab.log(
 				'{0} lines are common across following set of project files: ' \
