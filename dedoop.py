@@ -1,11 +1,17 @@
-import sublime, sublime_plugin, os, re
+import sublime, sublime_plugin, os, re, sys
+
+# import workaround
+# http://www.sublimetext.com/forum/viewtopic.php?f=6&t=2567
+cmd_folder = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(cmd_folder, 'chardet'))
+import chardet
 
 class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 	"""
 	seeks and shows all duplicate fragments across current project files
 	"""
 
-	def run(self, edit, file_extension='js', encoding='utf-8', comment_char='//', min_lines=50): 
+	def run(self, edit, file_extension='js', encoding='auto', comment_char='//', min_lines=50): 
 		
 		output_tab = OutputTab()
 		
@@ -83,6 +89,7 @@ class LineIndex:
 		self.encoding = encoding
 		self.comment_char = comment_char
 		self.min_lines = min_lines
+		self.file_encoding = {}
 		
 	def index(self, dirname):
 		for root, dirs, files in os.walk(dirname):
@@ -101,9 +108,14 @@ class LineIndex:
 		
 		with open(file_path, 'r') as file: 
 			text = file.readlines()
+			
+			encoding = self.encoding if self.encoding != 'auto' \
+				else chardet.detect('\n'.join(text))['encoding']
+			
+			self.file_encoding[file_path] = encoding
 
 			for line in text:
-				line = line.decode(self.encoding)
+				line = line.decode(encoding)
 				
 				if line.strip().startswith(self.comment_char):
 					continue
@@ -139,12 +151,20 @@ class LineIndex:
 		large_chunks = []
 
 		with open(file_path, 'r') as file: 
-			text = file.readlines()
 
+			text = file.readlines()
+			
+			encoding = self.encoding if self.encoding != 'auto' \
+				else self.file_encoding.get(
+					file_path,
+					chardet.detect('\n'.join(text))['encoding']
+				)
+				
+			
 			started_chunk = Chunk(length=0)
 
 			for line in text:
-				line = line.decode(self.encoding)
+				line = line.decode(encoding)
 				
 				if line.strip().startswith(self.comment_char):
 					continue

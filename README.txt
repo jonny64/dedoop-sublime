@@ -16,6 +16,8 @@
 	{ "keys": ["ctrl+alt+d"], "command": "find_duplicate_code",  
 		"args":{"min_lines": 30, "encoding": "utf-8", "file_extension": "js", "comment_char" : "//"}} 
 
+	if "encoding" was omitted plugin will guess file encoding (using chardet library)
+
 3. USAGE
 
 	use hotkey to generate report for opened project
