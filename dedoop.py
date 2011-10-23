@@ -168,22 +168,9 @@ class Chunk:
 
 		self.length = length
 
-	# hashble
-	def __hash__(self):
-		return self.get_hash()
-	
-	def __eq__(self, other):
-		return self.get_hash() == other.get_hash()
-
 	def get_files(self):
 		return self.files
 	
-	def get_hash(self):
-		# TODO: if 32 bits not enough use something fast and large instead
-		# like MurmurHash http://pypi.python.org/pypi/smhasher
-		return self.text.__hash__()
-		#return hashlib.md5(self.line.encode()).hexdigest()
-
 	def get_text(self):
 		return self.original_text
 
@@ -200,4 +187,16 @@ class Chunk:
 			merge_result.files = self.files.intersection(another_chunk.files)
 		
 		return merge_result
+	
+	def get_hash(self):
+		# TODO: if 32 bits not enough use something fast and large instead
+		# like MurmurHash http://pypi.python.org/pypi/smhasher
+		return self.text.__hash__()
+			
+	# hashable
+	def __hash__(self):
+		return self.get_hash()
+	
+	def __eq__(self, other):
+		return self.get_hash() == other.get_hash()
 
