@@ -1,4 +1,4 @@
-import sublime, sublime_plugin, os, os.path, re, hashlib
+import sublime, sublime_plugin, os, re
 
 class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 	"""
