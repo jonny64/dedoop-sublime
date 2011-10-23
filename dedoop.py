@@ -7,15 +7,12 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 
 	def run(self, edit, file_extension='js', encoding='utf-8', comment_char='//', min_lines=50): 
 		
-		self.results = self.view.window().new_file()
-		self.results.set_name('Duplicate code in project')
-		self.results.set_scratch(True)
-		self.edit = edit
-
-		self.append("\nSearching for duplicate lines in project folders:")
+		output_tab = OutputTab()
+		
+		output_tab.log('Searching for duplicate lines in project folders:')
 		project_folders = sublime.active_window().folders()
 		if len(project_folders) == 0:
-			self.append("\nProject does not contain any folder. Aborting")
+			output_tab.log('\nProject does not contain any folder. Aborting')
 			return
 		
 		# index files in project folders
@@ -26,40 +23,57 @@ class FindDuplicateCodeCommand(sublime_plugin.TextCommand):
 			min_lines      = min_lines
 		)
 		for folder in project_folders:
-			self.append("\t{0}".format(folder))
+			output_tab.log('\t{0}'.format(folder))
 			idx.index(folder)
 		
-		self.append(
+		output_tab.log(
 			'\n{0} unique lines indexed ' \
 				.format(len(idx.get_chunks()))
 		)
-		self.append('searching for text duplicates larger than {0} lines'.format(min_lines))
+		output_tab.log('\ntext duplicates larger than {0} lines'.format(min_lines))
 
 		# find common chunks, print report
 		common_chunks = idx.get_common_chunks()
 		if len(common_chunks) == 0:
-			self.append("\nNothing found. Your project is probably ok")
+			output_tab.log("\nNothing found. Your project is probably ok")
 			return
 
 		for chunk in common_chunks:
-			self.append('\n------------------------------------------------------------------')
-			self.append(
+			output_tab.log('\n------------------------------------------------------------------')
+			output_tab.log(
 				'{0} lines are common across following set of project files: ' \
 					.format(chunk.length)
 				)
 			for file_path in chunk.get_files():
-				self.append('\t{0}'.format(file_path))
-			self.append(chunk.get_text())
+				output_tab.log('\t{0}'.format(file_path))
+			output_tab.log(chunk.get_text())
 
-		# scroll to top
-		self.results.show(0)
+		output_tab.scroll_to_top()
 
-	def append(self, text):
-		self.results.run_command("insert_snippet", {"contents": text + "\n"})
+class OutputTab:
+	"""
+	Provides text logging to sublime tab
+	"""
+	def __init__(self):
+		self.output_view = sublime.active_window().new_file()
+		self.output_view.set_name('Duplicate code in project')
+		self.output_view.set_scratch(True)
+
+	def log(self, text):
+		# Normalize newlines, Sublime Text always uses a single \n separator
+		# in memory.
+		text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+		edit = self.output_view.begin_edit()
+		self.output_view.insert(edit, self.output_view.size(), text + '\n')
+		self.output_view.end_edit(edit)
+
+	def scroll_to_top(self):
+		self.output_view.show(0)
 
 class LineIndex:
 	"""
-	helper index for duplicate text blocks across files
+	index for duplicate text blocks across files
 	"""
 	def __init__(self, file_extension, encoding, comment_char, min_lines):
 		self.files = []
